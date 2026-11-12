@@ -1,0 +1,39 @@
+name: ComicFlow video render
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: ComicFlow job ID
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: comicflow-${{ inputs.job_id }}
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      JOB_ID: ${{ inputs.job_id }}
+      COMICFLOW_API_URL: ${{ secrets.COMICFLOW_API_URL }}
+      COMICFLOW_WORKER_SECRET: ${{ secrets.COMICFLOW_WORKER_SECRET }}
+      BLOB_PUBLIC_READ_WRITE_TOKEN: ${{ secrets.BLOB_PUBLIC_READ_WRITE_TOKEN }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Render and upload MP4
+        run: node worker/render.mjs

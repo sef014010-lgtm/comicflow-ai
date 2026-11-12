@@ -23,7 +23,7 @@ export async function readPrivateJson(pathname: string): Promise<any | null> {
   return response.json();
 }
 export async function savePublicAsset(pathname: string, data: Buffer | Uint8Array, contentType: string) {
-  return put(pathname, data, { access: "public", addRandomSuffix: true, contentType, token: publicToken() });
+  return put(pathname, Buffer.from(data), { access: "public", addRandomSuffix: true, contentType, token: publicToken() });
 }
 export const SETTINGS_PATH = "comicflow/private/settings.enc.json";
 export const jobPath = (id: string) => `comicflow/private/jobs/${id}.json`;

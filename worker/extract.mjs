@@ -21,21 +21,66 @@ async function callback(payload) {
   if (!r.ok) throw new Error(`Worker callback failed (${r.status}): ${(await r.text()).slice(0, 300)}`);
 }
 
-async function ollama(prompt) {
-  console.log('Generating recap script with local Ollama...');
+async function ollama(prompt, attempt = 1) {
+  console.log(`Generating recap script with local Ollama (attempt ${attempt}/2)...`);
   const r = await fetch('http://127.0.0.1:11434/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: MODEL, prompt, stream: false, format: 'json',
-      options: { temperature: 0.35, num_ctx: 8192, num_predict: 1200 },
+      model: MODEL,
+      prompt,
+      stream: false,
+      format: 'json',
+      options: {
+        temperature: attempt === 1 ? 0.25 : 0.15,
+        num_ctx: 8192,
+        num_predict: attempt === 1 ? 1800 : 2400
+      },
       keep_alive: '10m'
     }),
     signal: AbortSignal.timeout(900000)
   });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error || 'Local Ollama script generation failed.');
-  return d.response || '';
+
+  const raw = await r.text();
+  if (!r.ok) throw new Error(`Local Ollama returned HTTP ${r.status}: ${raw.slice(0, 800)}`);
+  let data;
+  try { data = JSON.parse(raw); }
+  catch { throw new Error(`Ollama returned an invalid API response: ${raw.slice(0, 800)}`); }
+
+  const response = String(data.response || '').trim();
+  console.log(`Ollama response received: ${response.length} characters; done=${Boolean(data.done)}; reason=${data.done_reason || 'unknown'}.`);
+  if (!response) throw new Error(`Ollama returned an empty response (done_reason: ${data.done_reason || 'unknown'}).`);
+  return response;
+}
+
+function parseRecapResponse(raw) {
+  const text = String(raw || '').trim();
+  const unfenced = text.replace(/^\`\`\`(?:json)?\s*/i, '').replace(/\s*\`\`\`$/i, '').trim();
+  const candidates = [unfenced];
+  const firstBrace = unfenced.indexOf('{');
+  const lastBrace = unfenced.lastIndexOf('}');
+  if (firstBrace >= 0 && lastBrace > firstBrace) candidates.push(unfenced.slice(firstBrace, lastBrace + 1));
+
+  for (const candidate of candidates) {
+    try {
+      const value = JSON.parse(candidate);
+      if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+      const narration = [value.narration, value.script, value.recap, value.voiceover, value.voice_over, value.text]
+        .find(item => typeof item === 'string' && item.trim().length >= 30);
+      if (narration) return {
+        narration: narration.trim(),
+        youtubeTitle: value.youtubeTitle || value.title,
+        description: value.description,
+        keywords: value.keywords,
+        hashtags: value.hashtags
+      };
+    } catch {
+      // Try the next candidate; malformed model output is handled below.
+    }
+  }
+
+  if (unfenced.length >= 30 && !unfenced.startsWith('{')) return { narration: unfenced };
+  throw new Error(`Qwen response did not contain a usable narration field. Response preview: ${text.slice(0, 700)}`);
 }
 
 async function resizeForVision(page, bytes, contentType) {
@@ -208,11 +253,35 @@ try {
     ));
   }
 
-  const prompt = `Write an original truthful YouTube comic recap in American English based on the complete chronological story segments below. Every page of the chapter was analyzed. Preserve chronology and important events; do not invent names, dialogue, or events. Tone: ${job.tone}. Length: ${job.format === 'shorts' ? '110-145 words' : '420-650 words'}. Return valid JSON with narration, youtubeTitle, description, keywords array, hashtags array. STORY SEGMENTS:\\n${storySegments.map((s, i) => `SEGMENT ${i + 1}: ${s}`).join('\\n\\n')}`;
+  const prompt = `Write an original, accurate YouTube comic recap in American English using every chronological story segment below. Preserve the actual sequence of events and important character actions. Do not invent names, dialogue, motivations, or events unsupported by the page observations. Avoid repeating events. Tone: ${job.tone || 'cinematic, engaging and suspenseful'}. Length: ${job.format === 'shorts' ? '110-145 words' : '420-550 words'}. Return one valid JSON object only, with these exact fields: "narration" (complete spoken script as a string), "youtubeTitle" (short title), "description" (2-3 sentences), "keywords" (array of strings), and "hashtags" (array of strings). Do not wrap the JSON in Markdown.
+
+STORY SEGMENTS:
+${storySegments.map((s, i) => `SEGMENT ${i + 1}:\n${s}`).join('\n\n')}`;
   await callback({ status: 'extracting', progress: 78 });
-  const result = JSON.parse(await ollama(prompt));
-  if (typeof result.narration !== 'string' || result.narration.trim().length < 30) {
-    throw new Error('Local Qwen did not return a usable narration.');
+
+  let result;
+  let lastGenerationError;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const raw = await ollama(
+        attempt === 1
+          ? prompt
+          : `The previous response was unusable. Produce the complete narration now. Output valid JSON only with a string field named narration (at least 30 characters), plus youtubeTitle, description, keywords, and hashtags. Keep the required word count and use only supplied story facts.\n\n${prompt}`,
+        attempt
+      );
+      result = parseRecapResponse(raw);
+      if (result.narration.length >= 30) break;
+    } catch (error) {
+      lastGenerationError = error;
+      console.error(`Recap generation attempt ${attempt} failed:`, error instanceof Error ? error.message : String(error));
+      if (attempt === 2) throw error;
+    }
+  }
+
+  if (!result || typeof result.narration !== 'string' || result.narration.trim().length < 30) {
+    throw new Error(lastGenerationError instanceof Error
+      ? `Recap generation failed after 2 attempts: ${lastGenerationError.message}`
+      : 'Qwen did not produce a narration of at least 30 characters after 2 attempts.');
   }
 
   await callback({

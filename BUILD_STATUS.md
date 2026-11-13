@@ -15,6 +15,6 @@ Date: 2026-11-11
 
 - `npm install` could not finish because the package registry was unreachable from this environment.
 - Consequently `npm run typecheck` and `npm run build` were not completed with the real Next.js/React/Vercel dependency tree.
-- No live Vercel deployment, Blob upload, Groq/Together/Cerebras API call, Edge TTS request, GitHub workflow dispatch, or end-to-end chapter render was possible without the user's accounts and credentials.
+- No live Vercel deployment, Blob upload, Ollama local vision inference, Edge TTS request, GitHub workflow dispatch, or end-to-end chapter render was possible without the user's accounts and credentials.
 
 Do not describe this project as fully production-tested until the deployment checklist in `README.md` has been completed with a short, authorized sample chapter.

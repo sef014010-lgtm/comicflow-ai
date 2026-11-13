@@ -1,7 +1,7 @@
 import { jobPath, readPrivateJson, savePrivateJson } from "@/lib/blob";
 export type ComicJob = {
   id: string; status: string; createdAt: string; updatedAt: string; format: "shorts" | "landscape";
-  sourceUrls: string[]; tone?: string; pages: Array<{ url: string; page: number }>; visualNotes: string;
+  sourceUrls: string[]; tone?: string; pages: Array<{ url: string; page: number }>; pageNotes?: string[]; visualNotes: string;
   narration: string; youtubeTitle: string; description: string; keywords: string[]; hashtags: string[];
   provider: string; voice?: string; audioParts?: Array<{ url: string; index: number; attempts: number }>;
   videoUrl?: string; error?: string; progress?: number; githubRunUrl?: string;

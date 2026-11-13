@@ -10,7 +10,7 @@ permissions:
   contents: read
 concurrency:
   group: comicflow-extract-${{ inputs.job_id }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   extract-and-script:
     runs-on: ubuntu-latest

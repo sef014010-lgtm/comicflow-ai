@@ -36,7 +36,7 @@ try {
   const response = await fetch(`${api}/api/worker/job/${jobId}`, { headers: { Authorization: `Bearer ${workerSecret}` }, cache: 'no-store' });
   if (!response.ok) throw new Error(`Could not claim job (${response.status}): ${(await response.text()).slice(0, 500)}`);
   const job = await response.json();
-  if (!Array.isArray(job.pages) || !job.pages.length || job.pages.length > 12) throw new Error('Job has an invalid page list (maximum 12).');
+  if (!Array.isArray(job.pages) || !job.pages.length) throw new Error('Job has an invalid or empty page list.');
   if (!Array.isArray(job.audioParts) || !job.audioParts.length || job.audioParts.length > 3) throw new Error('Job has an invalid audio list (maximum 3).');
   temp = await mkdtemp(path.join(tmpdir(), 'comicflow-render-'));
   const width = job.format === 'landscape' ? 1920 : 1080;

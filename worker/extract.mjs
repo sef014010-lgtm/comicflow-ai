@@ -128,7 +128,7 @@ async function vision(page, pageNumber, bytes, contentType) {
 
 async function summarizeChunk(chunk, firstPage, lastPage, tone) {
   const prompt = `Summarize these sequential comic page observations into a compact, chronological story segment. Preserve all important events, character actions, revelations, and dialogue context. Do not invent facts. Tone preference: ${tone}. Return plain text, maximum 450 words.\n\n${chunk.map((n, i) => `PAGE ${firstPage + i}: ${n}`).join('\n')}`;
-  const r = await fetch('http://127.0.0.1:11434/api/generate', {
+  const r = await withRetry(`Ollama summary pages ${firstPage}-${lastPage}`, () => fetch('http://127.0.0.1:11434/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -246,11 +246,19 @@ try {
 
   // Hierarchical summarization prevents long chapters from overflowing the model context.
   const storySegments = [];
+  const chunkCount = Math.ceil(notes.length / 8);
   for (let offset = 0; offset < notes.length; offset += 8) {
     const chunk = notes.slice(offset, offset + 8);
-    storySegments.push(await summarizeChunk(
-      chunk, offset + 1, offset + chunk.length, job.tone
-    ));
+    const firstPage = offset + 1;
+    const lastPage = offset + chunk.length;
+    console.log(`Summarizing analyzed pages ${firstPage}-${lastPage}...`);
+    storySegments.push(await summarizeChunk(chunk, firstPage, lastPage, job.tone));
+    await callback({
+      status: 'extracting',
+      progress: 70 + Math.round(storySegments.length / chunkCount * 7),
+      pages,
+      pageNotes: notes
+    });
   }
 
   const prompt = `Write an original, accurate YouTube comic recap in American English using every chronological story segment below. Preserve the actual sequence of events and important character actions. Do not invent names, dialogue, motivations, or events unsupported by the page observations. Avoid repeating events. Tone: ${job.tone || 'cinematic, engaging and suspenseful'}. Length: ${job.format === 'shorts' ? '110-145 words' : '420-550 words'}. Return one valid JSON object only, with these exact fields: "narration" (complete spoken script as a string), "youtubeTitle" (short title), "description" (2-3 sentences), "keywords" (array of strings), and "hashtags" (array of strings). Do not wrap the JSON in Markdown.

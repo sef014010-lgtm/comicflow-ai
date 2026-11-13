@@ -16,7 +16,6 @@ const statusLabels: Record<string, string> = {
 export default function Home() {
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
-  const [saved, setSaved] = useState({ localVision: true, localText: true });
   const [urls, setUrls] = useState(""); const [format, setFormat] = useState("shorts");
   const [tone, setTone] = useState("Cinematic, engaging and suspenseful");
   const [voice, setVoice] = useState("en-US-AndrewNeural");
@@ -32,7 +31,7 @@ export default function Home() {
   async function login(e: FormEvent) {
     e.preventDefault(); setError(""); setBusy(true);
     try {
-      const data = await api("/api/settings"); setSaved(data.saved || { localVision: true, localText: true });
+      await api("/api/settings");
       setAuthenticated(true); setStatus("Dashboard unlocked.");
       const history = await api("/api/jobs"); setRecentJobs(history.jobs || []);
     } catch (e: any) { setError(e.message); }
@@ -76,7 +75,7 @@ export default function Home() {
     const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
     const a = document.createElement("a"); a.href = url; a.download = "comicflow-youtube-package.txt"; a.click(); URL.revokeObjectURL(url);
   }
-  if (!authenticated) return <main className="login-shell"><div className="login-card"><div className="brand-mark">CF</div><p className="eyebrow">CREATOR WORKSPACE</p><h1>ComicFlow <span>AI</span></h1><p className="muted">Your cinematic comic recap production studio.</p><form onSubmit={login}><label>Dashboard password</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your app password" required/><button className="primary full" disabled={busy}>{busy ? "Checking..." : "Unlock workspace"}</button></form>{error && <p className="error">{error}</p>}<p className="tiny">Private workspace · API keys are encrypted on the server</p></div></main>;
+  if (!authenticated) return <main className="login-shell"><div className="login-card"><div className="brand-mark">CF</div><p className="eyebrow">CREATOR WORKSPACE</p><h1>ComicFlow <span>AI</span></h1><p className="muted">Your cinematic comic recap production studio.</p><form onSubmit={login}><label>Dashboard password</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your app password" required/><button className="primary full" disabled={busy}>{busy ? "Checking..." : "Unlock workspace"}</button></form>{error && <p className="error">{error}</p>}<p className="tiny">Private workspace · AI processing runs on the GitHub worker with local Ollama</p></div></main>;
   return <main className="app-shell">
     <header className="topbar"><div className="brand"><div className="brand-mark small">CF</div><div><strong>ComicFlow <span>AI</span></strong><small>RECAP PRODUCTION STUDIO</small></div></div><div className="top-actions"><span className="secure"><i/> Private workspace</span><span className="secure"><i/> Local AI · Ollama Qwen2.5-VL</span></div></header>
     <section className="hero"><div><p className="eyebrow">FROM COMIC PAGES TO CINEMATIC VIDEO</p><h1>Turn a chapter into<br/><em>a story worth watching.</em></h1><p className="hero-copy">Extract authorized chapter pages with Playwright, write a recap with local Qwen, generate narration, and render an MP4 in the cloud.</p></div><div className="hero-art"><div className="art-orbit orbit-one"/><div className="art-orbit orbit-two"/><div className="art-card card-back">STORY<br/>FLOW</div><div className="art-card card-front"><span>01</span><b>PAGE</b><span className="art-line"/><b>VOICE</b><span className="art-line"/><b>VIDEO</b></div><div className="art-glow"/></div></section>

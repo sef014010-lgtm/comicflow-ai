@@ -22,6 +22,8 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Validate extraction worker syntax
+        run: node --check worker/extract.mjs
       - name: Type-check
         run: npm run typecheck
       - name: Build Next.js

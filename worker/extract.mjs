@@ -21,7 +21,7 @@ async function vision(page, pageNumber, url) {
   const r = await fetch('http://127.0.0.1:11434/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'qwen2.5vl:3b', prompt, images: [bytes.toString('base64')], stream: false, options: { temperature: 0.2, num_ctx: 4096 }, keep_alive: '10m' }),
+    body: JSON.stringify({ model: 'qwen2.5vl:3b', prompt, images: [bytes.toString('base64')], stream: false, options: { temperature: 0.2, num_ctx: 8192 }, keep_alive: '10m' }),
     signal: AbortSignal.timeout(300000)
   });
   const d = await r.json();

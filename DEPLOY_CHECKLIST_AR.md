@@ -4,7 +4,7 @@
 
 - **Vercel:** واجهة الموقع وواجهات API في مشروع Next.js واحد، لذلك رابط الموقع ورابط الـ API من نفس النطاق (`/api/...`).
 - **GitHub Actions:** تشغيل FFmpeg على جهاز مؤقت عند طلب الرندر.
-- **Vercel Blob:** مخزن Public للصور والصوت والفيديو، ومخزن Private لمفاتيح AI المشفرة وبيانات المهام.
+- **Vercel Blob:** مخزن Public للصور والصوت والفيديو، ومخزن Private لبيانات المهام.
 
 ## قبل النشر
 
@@ -40,7 +40,7 @@ openssl rand -hex 32
 openssl rand -hex 32
 ```
 
-استخدم الناتج الأول لـ `ENCRYPTION_SECRET` والثاني لـ `WORKER_SECRET`. لا تغيّر `ENCRYPTION_SECRET` بعد حفظ المفاتيح، وإلا لن يمكن فك تشفير المفاتيح المحفوظة سابقًا.
+استخدم الناتج الأول لـ `ENCRYPTION_SECRET` والثاني لـ `WORKER_SECRET`. احتفظ بـ `ENCRYPTION_SECRET` ثابتًا لأنه يُستخدم لحماية بيانات التطبيق الخاصة.
 
 ## أسرار GitHub Actions
 
@@ -52,7 +52,7 @@ openssl rand -hex 32
 | `COMICFLOW_WORKER_SECRET` | نفس قيمة `WORKER_SECRET` في Vercel |
 | `BLOB_PUBLIC_READ_WRITE_TOKEN` | نفس رمز مخزن Blob العام |
 
-لا تضع رمز المخزن Private أو مفاتيح مزودي الذكاء الاصطناعي في GitHub Actions.
+لا تضع رمز المخزن Private في GitHub Actions. لا توجد مفاتيح لمزودي AI مطلوبة.
 
 ## أول تشغيل
 

@@ -19,7 +19,7 @@ const statusLabels: Record<string, string> = {
   failed: "Needs attention",
 };
 
-};
+
 export default function Home() {
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);

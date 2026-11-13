@@ -20,7 +20,6 @@ jobs:
       COMICFLOW_API_URL: ${{ secrets.COMICFLOW_API_URL }}
       COMICFLOW_WORKER_SECRET: ${{ secrets.COMICFLOW_WORKER_SECRET }}
       BLOB_PUBLIC_READ_WRITE_TOKEN: ${{ secrets.BLOB_PUBLIC_READ_WRITE_TOKEN }}
-      GROQ_VISION_MODEL: meta-llama/llama-4-scout-17b-16e-instruct
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,6 +39,6 @@ jobs:
           curl -fsSL https://ollama.com/install.sh | sh
           (ollama serve > /tmp/ollama.log 2>&1 &)
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:11434/api/tags >/dev/null && break || sleep 2; done
-          ollama pull qwen2.5:1.5b
+          ollama pull qwen2.5vl:3b
       - name: Extract authorized public pages and generate script
         run: node worker/extract.mjs

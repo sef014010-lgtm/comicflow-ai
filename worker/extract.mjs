@@ -12,7 +12,7 @@ if (!api || !secret || !blobToken || !jobId) {
 
 const headers = { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' };
 const MODEL = 'qwen2.5vl:3b';
-const MAX_PAGES = 6;
+
 
 async function callback(payload) {
   const r = await fetch(`${api}/api/worker/job/${jobId}`, {
@@ -59,16 +59,16 @@ async function resizeForVision(page, bytes, contentType) {
 async function vision(page, pageNumber, bytes, contentType) {
   console.log(`Preparing page ${pageNumber} for vision analysis...`);
   const image = await resizeForVision(page, bytes, contentType);
-  console.log(`Sending resized page ${pageNumber} to ${MODEL} (${Math.round(image.length / 1024)} KB)...`);
+  console.log(`Sending page ${pageNumber} to ${MODEL} (${Math.round(image.length / 1024)} KB)...`);
   const r = await fetch('http://127.0.0.1:11434/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: MODEL,
-      prompt: `Analyze comic page ${pageNumber}. Describe only visible characters, actions, expressions, setting, objects, and readable dialogue. Do not invent names or events. Return concise factual notes in 2-4 sentences.`,
+      prompt: `Analyze comic page ${pageNumber}. Record the visible characters, actions, expressions, setting, important objects, and readable dialogue. Keep the events in this page only; do not invent names or events. Return 1-3 concise factual sentences.`,
       images: [image],
       stream: false,
-      options: { temperature: 0.1, num_ctx: 4096, num_predict: 120 },
+      options: { temperature: 0.1, num_ctx: 4096, num_predict: 150 },
       keep_alive: '10m'
     }),
     signal: AbortSignal.timeout(900000)
@@ -78,7 +78,25 @@ async function vision(page, pageNumber, bytes, contentType) {
   const note = String(d.response || '').trim();
   if (!note) throw new Error(`Local Ollama returned no vision notes for page ${pageNumber}.`);
   console.log(`Vision complete for page ${pageNumber}.`);
-  return note.slice(0, 700);
+  return note.slice(0, 500);
+}
+
+async function summarizeChunk(chunk, firstPage, lastPage, tone) {
+  const prompt = `Summarize these sequential comic page observations into a compact, chronological story segment. Preserve all important events, character actions, revelations, and dialogue context. Do not invent facts. Tone preference: ${tone}. Return plain text, maximum 450 words.\n\n${chunk.map((n, i) => `PAGE ${firstPage + i}: ${n}`).join('\n')}`;
+  const r = await fetch('http://127.0.0.1:11434/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: MODEL, prompt, stream: false,
+      options: { temperature: 0.2, num_ctx: 8192, num_predict: 650 },
+      keep_alive: '10m'
+    }),
+    signal: AbortSignal.timeout(900000)
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || `Failed summarizing pages ${firstPage}-${lastPage}.`);
+  if (!String(d.response || '').trim()) throw new Error(`Empty summary for pages ${firstPage}-${lastPage}.`);
+  return String(d.response).trim();
 }
 
 let browser;
@@ -110,7 +128,11 @@ try {
       throw new Error('Chapter appears gated by sign-in or purchase; access restrictions will not be bypassed.');
     }
 
-    for (let pass = 0; pass < 14; pass++) {
+    // Keep scrolling until the reader reaches the bottom and no new page images appear.
+    // There is deliberately no fixed page-count limit.
+    let stagnantPasses = 0;
+    let previousCount = -1;
+    while (stagnantPasses < 8) {
       const imgs = await page.locator('img').evaluateAll(nodes => nodes.map(img => ({
         src: img.currentSrc || img.src || img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || '',
         w: img.naturalWidth || img.width || 0,
@@ -126,21 +148,30 @@ try {
           if (u.protocol === 'https:') found.set(u.href, u.href);
         } catch {}
       }
-      if (found.size >= MAX_PAGES) break;
-      await page.evaluate(() => window.scrollBy(0, Math.max(600, window.innerHeight * 0.8)));
-      await page.waitForTimeout(450);
+
+      if (found.size === previousCount) stagnantPasses++;
+      else stagnantPasses = 0;
+      previousCount = found.size;
+
+      const state = await page.evaluate(() => ({
+        atBottom: window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 80,
+        height: document.documentElement.scrollHeight
+      }));
+      await page.evaluate(() => window.scrollBy(0, Math.max(600, window.innerHeight * 0.75)));
+      await page.waitForTimeout(state.atBottom ? 1200 : 700);
+      if (state.atBottom && stagnantPasses >= 3) break;
     }
-    if (found.size >= MAX_PAGES) break;
   }
 
-  const imageUrls = [...found.keys()].slice(0, MAX_PAGES);
+  const imageUrls = [...found.keys()];
   if (!imageUrls.length) {
     throw new Error('Playwright found no complete page images. The chapter may be gated or use a reader layout needing a site-specific selector.');
   }
-  console.log(`Playwright found ${found.size} candidate images; processing ${imageUrls.length} pages.`);
+  console.log(`Playwright found ${imageUrls.length} unique candidate page images. No page-count cap is applied.`);
   await callback({ status: 'extracting', progress: 25 });
 
   const pages = [];
+  const notes = [];
   for (let i = 0; i < imageUrls.length; i++) {
     const response = await page.request.get(imageUrls[i], { timeout: 45000 });
     if (!response.ok()) throw new Error(`Page image ${i + 1} download failed (${response.status()}).`);
@@ -152,23 +183,33 @@ try {
     }
     const ext = type.includes('png') ? 'png' : type.includes('webp') ? 'webp' : type.includes('avif') ? 'avif' : 'jpg';
     const asset = await put(
-      `comicflow/jobs/${jobId}/pages/page-${String(i + 1).padStart(3, '0')}.${ext}`,
+      `comicflow/jobs/${jobId}/pages/page-${String(i + 1).padStart(4, '0')}.${ext}`,
       bytes,
       { access: 'public', addRandomSuffix: true, contentType: type, token: blobToken }
     );
-    pages.push({ url: asset.url, page: i + 1, bytes, contentType: type });
-    await callback({ status: 'extracting', progress: 25 + Math.round((i + 1) / imageUrls.length * 20) });
-  }
+    pages.push({ url: asset.url, page: i + 1 });
+    console.log(`Saved original page image ${i + 1}/${imageUrls.length} for final rendering.`);
 
-  const notes = [];
-  for (let i = 0; i < pages.length; i++) {
-    const note = await vision(page, i + 1, pages[i].bytes, pages[i].contentType);
+    // Analyze each page individually to keep memory and model context bounded.
+    const note = await vision(page, i + 1, bytes, type);
     notes.push(note);
-    await callback({ status: 'extracting', progress: 45 + Math.round((i + 1) / pages.length * 20) });
+    await callback({
+      status: 'extracting',
+      progress: 25 + Math.round((i + 1) / imageUrls.length * 45)
+    });
   }
 
-  const prompt = `Write an original truthful YouTube comic recap in American English based only on these visible page notes. Preserve chronology; do not invent names or events. Tone: ${job.tone}. Length: ${job.format === 'shorts' ? '110-145 words' : '420-650 words'}. Return JSON with narration, youtubeTitle, description, keywords array, hashtags array. PAGE NOTES:\n${notes.map((n, i) => `PAGE ${i + 1}: ${n}`).join('\n\n')}`;
-  await callback({ status: 'extracting', progress: 65 });
+  // Hierarchical summarization prevents long chapters from overflowing the model context.
+  const storySegments = [];
+  for (let offset = 0; offset < notes.length; offset += 8) {
+    const chunk = notes.slice(offset, offset + 8);
+    storySegments.push(await summarizeChunk(
+      chunk, offset + 1, offset + chunk.length, job.tone
+    ));
+  }
+
+  const prompt = `Write an original truthful YouTube comic recap in American English based on the complete chronological story segments below. Every page of the chapter was analyzed. Preserve chronology and important events; do not invent names, dialogue, or events. Tone: ${job.tone}. Length: ${job.format === 'shorts' ? '110-145 words' : '420-650 words'}. Return valid JSON with narration, youtubeTitle, description, keywords array, hashtags array. STORY SEGMENTS:\\n${storySegments.map((s, i) => `SEGMENT ${i + 1}: ${s}`).join('\\n\\n')}`;
+  await callback({ status: 'extracting', progress: 78 });
   const result = JSON.parse(await ollama(prompt));
   if (typeof result.narration !== 'string' || result.narration.trim().length < 30) {
     throw new Error('Local Qwen did not return a usable narration.');
@@ -184,7 +225,7 @@ try {
     keywords: Array.isArray(result.keywords) ? result.keywords.slice(0, 25) : [],
     hashtags: Array.isArray(result.hashtags) ? result.hashtags.slice(0, 12) : []
   });
-  console.log(`Success: extracted and analyzed ${pages.length} pages; generated recap script locally with Ollama.`);
+  console.log(`Success: saved and analyzed all ${pages.length} discovered chapter pages; generated recap script locally with Ollama.`);
 } catch (e) {
   const message = e instanceof Error ? e.message : String(e);
   console.error('ComicFlow worker failed:', message);

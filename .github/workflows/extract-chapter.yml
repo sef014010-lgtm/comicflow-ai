@@ -20,7 +20,7 @@ jobs:
       COMICFLOW_API_URL: ${{ secrets.COMICFLOW_API_URL }}
       COMICFLOW_WORKER_SECRET: ${{ secrets.COMICFLOW_WORKER_SECRET }}
       BLOB_PUBLIC_READ_WRITE_TOKEN: ${{ secrets.BLOB_PUBLIC_READ_WRITE_TOKEN }}
-      GROQ_VISION_MODEL: meta-llama/llama-4-scout-17b-16e-instruct
+      GROQ_VISION_MODEL: ${{ vars.GROQ_VISION_MODEL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -31,6 +31,7 @@ jobs:
           test -n "$COMICFLOW_API_URL" || (echo "Missing COMICFLOW_API_URL secret" && exit 1)
           test -n "$COMICFLOW_WORKER_SECRET" || (echo "Missing COMICFLOW_WORKER_SECRET secret" && exit 1)
           test -n "$BLOB_PUBLIC_READ_WRITE_TOKEN" || (echo "Missing BLOB_PUBLIC_READ_WRITE_TOKEN secret" && exit 1)
+          test -n "$GROQ_VISION_MODEL" || (echo "Missing GitHub Actions variable GROQ_VISION_MODEL. Set it to a vision model ID available to your Groq account." && exit 1)
       - name: Install worker dependencies
         run: npm install --no-audit --no-fund && npm install --no-save playwright
       - name: Install Chromium

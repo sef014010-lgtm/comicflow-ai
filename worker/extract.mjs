@@ -8,7 +8,7 @@ async function callback(payload) {
   if (!r.ok) throw new Error(`Worker callback failed (${r.status}): ${(await r.text()).slice(0, 300)}`);
 }
 async function ollama(prompt) {
-  const r = await fetch('http://127.0.0.1:11434/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'qwen2.5vl:3b', prompt, stream: false, format: 'json', options: { temperature: 0.55, num_ctx: 8192 } }), signal: AbortSignal.timeout(240000) });
+  const r = await fetch('http://127.0.0.1:11434/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'qwen2.5vl:3b', prompt, stream: false, format: 'json', options: { temperature: 0.35, num_ctx: 8192, num_predict: 1800 } }), signal: AbortSignal.timeout(240000) });
   const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Local Ollama inference failed.'); return d.response || '';
 }
 async function vision(page, pageNumber, url) {
@@ -21,7 +21,7 @@ async function vision(page, pageNumber, url) {
   const r = await fetch('http://127.0.0.1:11434/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'qwen2.5vl:3b', prompt, images: [bytes.toString('base64')], stream: false, options: { temperature: 0.2, num_ctx: 4096 }, keep_alive: '10m' }),
+    body: JSON.stringify({ model: 'qwen2.5vl:3b', prompt, images: [bytes.toString('base64')], stream: false, options: { temperature: 0.2, num_ctx: 8192, num_predict: 180 }, keep_alive: '10m' }),
     signal: AbortSignal.timeout(300000)
   });
   const d = await r.json();
@@ -75,7 +75,7 @@ try {
   }
   const notes = [];
   for (let i = 0; i < pages.length; i++) {
-    notes.push(await vision(page, i + 1, pages[i].url));
+    notes.push((await vision(page, i + 1, pages[i].url)).slice(0, 900));
     await callback({ status: 'extracting', progress: 45 + Math.round((i + 1) / pages.length * 20) });
   }
   const prompt = `Write an original truthful YouTube comic recap in American English based only on the visible page notes. Preserve chronology; do not invent names or events. Tone: ${job.tone}. Length: ${job.format === 'shorts' ? '110-145 words' : '420-650 words'}. Return JSON with narration, youtubeTitle, description, keywords array, hashtags array. PAGE NOTES:\\n${notes.join('\\n\\n')}`;

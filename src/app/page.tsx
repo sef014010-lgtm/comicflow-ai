@@ -8,10 +8,17 @@ type Job = {
   audioParts?: Array<{ url: string; index: number; attempts: number }>;
   videoUrl?: string; error?: string; progress?: number; voice?: string;
 };
+
 const statusLabels: Record<string, string> = {
   extracting: "Extracting pages + local Qwen script",
-  script_ready: "Script ready", audio_ready: "Voice ready", queued: "Waiting for render worker",
-  rendering: "Rendering video on GitHub Actions", complete: "Video ready", failed: "Needs attention"
+  script_ready: "Script ready",
+  audio_ready: "Voice ready",
+  queued: "Waiting for render worker",
+  rendering: "Rendering video on GitHub Actions",
+  complete: "Video ready",
+  failed: "Needs attention",
+};
+
 };
 export default function Home() {
   const [password, setPassword] = useState("");

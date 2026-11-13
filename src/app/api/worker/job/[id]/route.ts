@@ -22,7 +22,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const job = await readJob(id);
     if (!job) return NextResponse.json({ error: "Job not found." }, { status: 404 });
     if (body.status === "script_ready") {
-      if (!Array.isArray(body.pages) || body.pages.length < 1 || body.pages.length > 500) throw new Error("Worker returned an invalid page list (maximum 500 safety limit).");
+      if (!Array.isArray(body.pages) || body.pages.length < 1) throw new Error("Worker returned an invalid page list.");
       if (typeof body.narration !== "string" || body.narration.length < 30 || body.narration.length > 7000) throw new Error("Worker returned an invalid narration script.");
       const pages = body.pages.map((p: any, i: number) => {
         const u = new URL(String(p.url));

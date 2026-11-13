@@ -1,0 +1,20 @@
+name: GlobalComix Playwright link test
+on:
+  push:
+    branches: ["fix/**"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-link:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund && npm install --no-save playwright
+      - run: npx playwright install --with-deps chromium
+      - name: Test the user-provided GlobalComix share link (no login/paywall bypass)
+        run: node worker/globalcomix-smoke.mjs

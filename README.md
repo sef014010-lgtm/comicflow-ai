@@ -4,10 +4,10 @@ ComicFlow turns **complete comic/manhwa page images** into a narrated recap vide
 
 ## Architecture selected
 
-- **Vercel / Next.js:** dashboard, password gate, encrypted provider-key settings, chapter extraction, vision analysis, narration script, Edge TTS, job state and API.
+- **Vercel / Next.js:** dashboard, password gate, chapter extraction, local Ollama vision and text analysis, narration script, Edge TTS, job state and API.
 - **GitHub Actions:** FFmpeg video rendering on an ephemeral GitHub-hosted Ubuntu runner. This avoids rendering in the browser and avoids Vercel Function duration limits for the video encode stage.
-- **Vercel Blob:** public media store for source page images, audio and final MP4; private media store for encrypted API keys and private job manifests.
-- **AI provider order:** Groq is required for image Vision and primary text generation; Together AI and Cerebras are optional text-generation fallbacks. Image Vision currently uses Groq only.
+- **Vercel Blob:** public media store for source page images, audio and final MP4; private media store for private job manifests.
+- **AI engine:** Ollama runs Qwen2.5-VL 3B locally on the temporary GitHub Actions runner for both image understanding and recap generation. No Groq, external AI key, or paid inference API is used.
 
 This is a deployable application codebase, not a hosted service. The owner must create the Vercel project, Blob stores, GitHub repository and secrets. No provider key or deployment credential is included in the ZIP.
 
@@ -90,19 +90,18 @@ In GitHub → Repository → Settings → Secrets and variables → Actions, add
 
 Do not add the private Blob token to GitHub Actions. The worker only uploads the final public MP4.
 
-## 6. Deploy and configure AI keys
+## 6. Deploy local AI worker
 
 1. Redeploy Vercel after setting environment variables.
-2. Open the Vercel URL and enter `APP_PASSWORD`.
-3. Open **API settings**.
-4. Enter the Groq key (required), and optionally Together AI and Cerebras keys.
-5. Save the keys. They are encrypted with AES-256-GCM before being written to the Private Blob store.
+2. Set `GITHUB_WORKFLOW_REF` to the branch containing the Ollama workflow (for this deployment: `fix/comicflow-pipeline-2026-11-13`).
+3. Open the Vercel URL and enter `APP_PASSWORD`.
+4. No AI provider keys or API settings are needed. GitHub Actions installs Ollama and downloads `qwen2.5vl:3b` for each extraction job.
 
 ## 7. Create a video
 
 1. Paste one to three authorized chapter URLs (one URL per line).
 2. Select Shorts (9:16) or Landscape (16:9), and choose a narration tone.
-3. Click **Analyze pages & write script**. The app extracts complete page images, stores them, analyzes them with Groq Vision, and writes narration plus YouTube metadata.
+3. Click **Analyze pages & write script**. The app extracts complete page images, stores them, analyzes them with local Ollama Qwen2.5-VL 3B, and writes narration plus YouTube metadata.
 4. Review and edit the narration if needed.
 5. Choose a US English voice and click **Generate voice**. Edge TTS creates audio segments with up to three attempts per segment.
 6. Click **Render final MP4**. Vercel dispatches the GitHub Actions workflow. The worker downloads pages and audio, renders each page with FFmpeg, joins the segments, muxes the narration, uploads the MP4 to Public Blob, and reports the result to Vercel.
@@ -128,7 +127,7 @@ This package includes the frontend, API routes, workflow, worker and deployment 
 - **401 / dashboard won't unlock:** confirm `APP_PASSWORD` is identical to the value entered.
 - **Private Blob errors:** verify `BLOB_PRIVATE_READ_WRITE_TOKEN` belongs to a Private store.
 - **Public asset upload errors:** verify `BLOB_PUBLIC_READ_WRITE_TOKEN` belongs to a Public store.
-- **AI provider errors:** confirm API keys, billing/quota, and current model IDs. Change model IDs in Vercel environment variables if the provider retires one.
+- **Ollama errors:** inspect the extraction workflow logs for model download, server startup, and local inference errors. The runner downloads the model again for each new job.
 - **No images found:** the source may require JavaScript, login, or a site-specific integration. This generic extractor will not bypass those controls.
 - **GitHub dispatch fails:** check `GITHUB_OWNER`, `GITHUB_REPO`, branch name, workflow file path, Actions enabled, and token Actions write permission.
 - **Worker cannot reach Vercel:** check `COMICFLOW_API_URL`, `COMICFLOW_WORKER_SECRET`, and that Vercel deployment is active.

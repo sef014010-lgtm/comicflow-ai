@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 import { put } from '@vercel/blob';
 const api = process.env.COMICFLOW_API_URL?.replace(/\/$/, ''), secret = process.env.COMICFLOW_WORKER_SECRET, blobToken = process.env.BLOB_PUBLIC_READ_WRITE_TOKEN, jobId = process.env.JOB_ID;
 if (!api || !secret || !blobToken || !jobId) throw new Error('Missing worker environment configuration.');
+if (!process.env.GROQ_VISION_MODEL) throw new Error('Missing GROQ_VISION_MODEL. Add it as a GitHub Actions variable and choose a vision model enabled for your Groq account.');
 const headers = { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' };
 async function callback(payload) {
   const r = await fetch(`${api}/api/worker/job/${jobId}`, { method: 'POST', headers, body: JSON.stringify(payload) });
@@ -14,7 +15,7 @@ async function ollama(prompt) {
 async function vision(key, urls, start) {
   const content = [{ type: 'text', text: `Describe these comic pages in order, numbered from ${start + 1}. Report only visible events, expressions, locations and readable story text. Do not guess names or events.` }];
   for (const url of urls) content.push({ type: 'image_url', image_url: { url } });
-  const r = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: process.env.GROQ_VISION_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct', messages: [{ role: 'user', content }], temperature: 0.2 }), signal: AbortSignal.timeout(90000) });
+  const r = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: process.env.GROQ_VISION_MODEL, messages: [{ role: 'user', content }], temperature: 0.2 }), signal: AbortSignal.timeout(90000) });
   const d = await r.json(); if (!r.ok) throw new Error(d?.error?.message || `Groq vision failed (${r.status}).`); return d.choices?.[0]?.message?.content || '';
 }
 let browser;

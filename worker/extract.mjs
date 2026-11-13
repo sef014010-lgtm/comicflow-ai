@@ -14,6 +14,19 @@ const headers = { Authorization: `Bearer ${secret}`, 'Content-Type': 'applicatio
 const MODEL = 'qwen2.5vl:3b';
 
 
+async function withRetry(label, operation, attempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try { return await operation(); }
+    catch (error) {
+      lastError = error;
+      console.warn(`${label} failed (attempt ${attempt}/${attempts}): ${error instanceof Error ? error.message : String(error)}`);
+      if (attempt < attempts) await new Promise(resolve => setTimeout(resolve, Math.min(15000, 1500 * 2 ** (attempt - 1))));
+    }
+  }
+  throw new Error(`${label} failed after ${attempts} attempts: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+}
+
 async function callback(payload) {
   const r = await fetch(`${api}/api/worker/job/${jobId}`, {
     method: 'POST', headers, body: JSON.stringify(payload), signal: AbortSignal.timeout(30000)
@@ -102,27 +115,28 @@ async function resizeForVision(page, bytes, contentType) {
 }
 
 async function vision(page, pageNumber, bytes, contentType) {
+  const startedAt = Date.now();
   console.log(`Preparing page ${pageNumber} for vision analysis...`);
   const image = await resizeForVision(page, bytes, contentType);
   console.log(`Sending page ${pageNumber} to ${MODEL} (${Math.round(image.length / 1024)} KB)...`);
-  const r = await fetch('http://127.0.0.1:11434/api/generate', {
+  const r = await withRetry(`Ollama vision request page ${pageNumber}`, () => fetch('http://127.0.0.1:11434/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: MODEL,
-      prompt: `Analyze comic page ${pageNumber}. Record the visible characters, actions, expressions, setting, important objects, and readable dialogue. Keep the events in this page only; do not invent names or events. Return 1-3 concise factual sentences.`,
+      prompt: `Analyze comic page ${pageNumber}. Record the main visible characters, actions, expressions, setting, and important objects. Do not invent names or events. Return 1-2 concise factual sentences.`,
       images: [image],
       stream: false,
-      options: { temperature: 0.1, num_ctx: 4096, num_predict: 150 },
-      keep_alive: '10m'
+      options: { temperature: 0.1, num_ctx: 4096, num_predict: 110 },
+      keep_alive: '30m'
     }),
-    signal: AbortSignal.timeout(900000)
-  });
+    signal: AbortSignal.timeout(480000)
+  }), 2);
   const d = await r.json();
-  if (!r.ok) throw new Error(d.error || `Local Ollama vision failed for page ${pageNumber}.`);
+  if (!r.ok) throw new Error(d.error || `Local Ollama vision failed for page ${pageNumber} (HTTP ${r.status}).`);
   const note = String(d.response || '').trim();
   if (!note) throw new Error(`Local Ollama returned no vision notes for page ${pageNumber}.`);
-  console.log(`Vision complete for page ${pageNumber}.`);
+  console.log(`Vision complete for page ${pageNumber} in ${Math.round((Date.now() - startedAt) / 1000)}s.`);
   return note.slice(0, 500);
 }
 
@@ -215,32 +229,36 @@ try {
   console.log(`Playwright found ${imageUrls.length} unique candidate page images. No page-count cap is applied.`);
   await callback({ status: 'extracting', progress: 25 });
 
-  const pages = [];
-  const notes = [];
+  const pages = Array.isArray(job.pages) ? [...job.pages] : [];
+  const notes = Array.isArray(job.pageNotes) ? [...job.pageNotes] : [];
+  console.log(`Checkpoint recovery: ${notes.filter(Boolean).length}/${imageUrls.length} page analyses already saved.`);
+
   for (let i = 0; i < imageUrls.length; i++) {
-    const response = await page.request.get(imageUrls[i], { timeout: 45000 });
+    if (typeof notes[i] === 'string' && notes[i].trim() && pages[i]?.url) {
+      console.log(`Skipping page ${i + 1}/${imageUrls.length}: restored from saved checkpoint.`);
+      continue;
+    }
+    const response = await withRetry(`Download page image ${i + 1}`, () => page.request.get(imageUrls[i], { timeout: 45000 }));
     if (!response.ok()) throw new Error(`Page image ${i + 1} download failed (${response.status()}).`);
     const type = response.headers()['content-type']?.split(';')[0] || '';
     if (!type.startsWith('image/')) throw new Error(`Page ${i + 1} did not return an image.`);
     const bytes = await response.body();
-    if (bytes.length < 1000 || bytes.length > 12 * 1024 * 1024) {
-      throw new Error(`Page ${i + 1} is empty or exceeds 12 MB.`);
-    }
+    if (bytes.length < 1000 || bytes.length > 12 * 1024 * 1024) throw new Error(`Page ${i + 1} is empty or exceeds 12 MB.`);
     const ext = type.includes('png') ? 'png' : type.includes('webp') ? 'webp' : type.includes('avif') ? 'avif' : 'jpg';
-    const asset = await put(
+    const asset = await withRetry(`Upload page image ${i + 1}`, () => put(
       `comicflow/jobs/${jobId}/pages/page-${String(i + 1).padStart(4, '0')}.${ext}`,
       bytes,
       { access: 'public', addRandomSuffix: true, contentType: type, token: blobToken }
-    );
-    pages.push({ url: asset.url, page: i + 1 });
+    ));
+    pages[i] = { url: asset.url, page: i + 1 };
     console.log(`Saved original page image ${i + 1}/${imageUrls.length} for final rendering.`);
-
-    // Analyze each page individually to keep memory and model context bounded.
-    const note = await vision(page, i + 1, bytes, type);
-    notes.push(note);
+    await callback({ status: 'extracting', progress: 25 + Math.round(i / imageUrls.length * 45), pages, pageNotes: notes });
+    notes[i] = await vision(page, i + 1, bytes, type);
     await callback({
       status: 'extracting',
-      progress: 25 + Math.round((i + 1) / imageUrls.length * 45)
+      progress: 25 + Math.round(notes.filter(Boolean).length / imageUrls.length * 45),
+      pages,
+      pageNotes: notes
     });
   }
 
@@ -265,7 +283,7 @@ try {
 
 STORY SEGMENTS:
 ${storySegments.map((s, i) => `SEGMENT ${i + 1}:\n${s}`).join('\n\n')}`;
-  await callback({ status: 'extracting', progress: 78 });
+  await callback({ status: 'extracting', progress: 78, pages, pageNotes: notes });
 
   let result;
   let lastGenerationError;

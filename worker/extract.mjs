@@ -150,8 +150,8 @@ async function summarizeChunk(chunk, firstPage, lastPage, tone) {
       options: { temperature: 0.2, num_ctx: 8192, num_predict: 650 },
       keep_alive: '10m'
     }),
-    signal: AbortSignal.timeout(900000)
-  });
+    signal: AbortSignal.timeout(480000)
+  }));
   const d = await r.json();
   if (!r.ok) throw new Error(d.error || `Failed summarizing pages ${firstPage}-${lastPage}.`);
   if (!String(d.response || '').trim()) throw new Error(`Empty summary for pages ${firstPage}-${lastPage}.`);

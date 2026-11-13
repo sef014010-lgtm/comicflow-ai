@@ -7,7 +7,7 @@ async function postJson(url: string, key: string, body: unknown) {
 }
 export async function chatWithFallback(keys: Keys, messages: any[]) {
   const providers = [
-    { name: "Groq", key: keys.groq, url: "https://api.groq.com/openai/v1/chat/completions", model: process.env.GROQ_TEXT_MODEL || "qwen/qwen3-32b" },
+    { name: "Groq", key: keys.groq, url: "https://api.groq.com/openai/v1/chat/completions", model: process.env.GROQ_TEXT_MODEL || "llama-3.3-70b-versatile" },
     { name: "Together AI", key: keys.together, url: "https://api.together.xyz/v1/chat/completions", model: process.env.TOGETHER_MODEL || "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
     { name: "Cerebras", key: keys.cerebras, url: "https://api.cerebras.ai/v1/chat/completions", model: process.env.CEREBRAS_MODEL || "llama-3.3-70b" }
   ];
@@ -22,7 +22,7 @@ export async function chatWithFallback(keys: Keys, messages: any[]) {
   throw new Error(errors.join(" | ") || "Save a valid Groq API key first.");
 }
 export async function describeImageBatch(groqKey: string, urls: string[], startIndex: number) {
- const model = process.env.GROQ_VISION_MODEL || "meta-llama/llama-4-scout-17b-16e-instruct";
+ const model = process.env.GROQ_VISION_MODEL || "qwen/qwen3.8-27b";
   const content: any[] = [{ type: "text", text: `Analyze these complete comic/manhwa pages in their given order (page numbers start at ${startIndex + 1}). Describe only visible events, characters, expressions, locations, and important text. Preserve the order of events. Do not infer unseen plot details, character names, or relationships. Return concise numbered page-by-page notes.` }];
   for (const url of urls) content.push({ type: "image_url", image_url: { url } });
   const data = await postJson("https://api.groq.com/openai/v1/chat/completions", groqKey, { model, messages: [{ role: "user", content }], temperature: 0.2 });

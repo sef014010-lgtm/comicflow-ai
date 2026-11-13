@@ -6,17 +6,17 @@ ComicFlow turns **complete comic/manhwa page images** into a narrated recap vide
 
 - **Vercel / Next.js:** dashboard, password gate, chapter job management, Edge TTS, job state and API.
 - **GitHub Actions:** FFmpeg video rendering on an ephemeral GitHub-hosted Ubuntu runner. This avoids rendering in the browser and avoids Vercel Function duration limits for the video encode stage.
-- **Vercel Blob:** public media store for source page images, audio and final MP4; private media store for encrypted API keys and private job manifests.
+- **Vercel Blob:** public media store for source page images, audio and final MP4; private media store for private job manifests.
 - **Local AI:** Ollama runs Qwen2.5-VL 3B on the GitHub Actions runner for both page-image vision analysis and recap-script generation. No external AI provider or AI API key is required.
 
-This is a deployable application codebase, not a hosted service. The owner must create the Vercel project, Blob stores, GitHub repository and secrets. No provider key or deployment credential is included in the ZIP.
+This is a deployable application codebase, not a hosted service. The owner must create the Vercel project, Blob stores, GitHub repository and secrets. No AI provider key or deployment credential is included in the ZIP.
 
 ## Important boundaries
 
 - The analyzer currently supports ordinary public HTML pages with standard `img` tags and common lazy-load attributes. It does not execute arbitrary website JavaScript and does not bypass logins, paywalls, CAPTCHA, anti-bot protections or other access controls.
 - Use only pages and images you own or are authorized to process. Do not submit adult/explicit material.
 - Up to 3 chapter URLs and 12 discovered page images are accepted per job in this build. This is intentionally bounded to fit Vercel's request window during extraction/analysis. Larger chapters should be processed as multiple jobs. The current render worker accepts up to 12 pages and 3 audio segments.
-- Each image is limited to 12 MB. Source image extraction and AI analysis run in a Vercel Function capped at 300 seconds in this project; Vercel Hobby's current Fluid Compute limit is up to 300 seconds. Unusually slow sites or providers may still time out. The FFmpeg render itself runs in GitHub Actions.
+- Each image is limited to 12 MB. Source extraction, local vision analysis and script generation run in a GitHub Actions worker. The FFmpeg render also runs in GitHub Actions.
 - GitHub-hosted Actions jobs have a maximum execution time of 6 hours. Standard GitHub-hosted runners are free for public repositories; private repositories receive plan-dependent included compute (GitHub Free currently lists $12/month of included compute, with overages governed by billing settings). `ubuntu-latest` standard runners currently provide 4 CPUs, 16 GB RAM and 14 GB SSD. Public-runner minutes may be free, but individual jobs, concurrency, storage, abuse policies and other GitHub limits still apply. See GitHub Actions billing, runner specifications and limits.
 - A standard GitHub-hosted runner is a temporary machine, not an always-on server. It is appropriate for queued jobs and render-on-demand, not persistent APIs or real-time workloads.
 - Edge TTS is an unofficial online integration and depends on the upstream service. Each segment retries up to three times.
@@ -45,7 +45,7 @@ The workflow is started by the Vercel API using the GitHub `workflow_dispatch` e
 The Blob access type is selected when creating a store, so this project uses two separate stores:
 
 - **Public Blob store:** stores page images, generated audio and final MP4 files. Set its token as `BLOB_PUBLIC_READ_WRITE_TOKEN`.
-- **Private Blob store:** stores encrypted provider keys and job manifests. Set its token as `BLOB_PRIVATE_READ_WRITE_TOKEN`.
+- **Private Blob store:** stores private job manifests. Set its token as `BLOB_PRIVATE_READ_WRITE_TOKEN`.
 
 Connect each store to the Vercel project or copy its read/write token into the matching environment variable. Do not swap the tokens.
 
@@ -76,7 +76,7 @@ openssl rand -hex 32   # ENCRYPTION_SECRET
 openssl rand -hex 32   # WORKER_SECRET
 ```
 
-Keep `ENCRYPTION_SECRET` stable after saving provider keys. If it changes, previously encrypted keys cannot be decrypted.
+Keep `ENCRYPTION_SECRET` stable for the application's encrypted private data.
 
 ## 5. Configure GitHub Actions secrets
 

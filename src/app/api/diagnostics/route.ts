@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireAppPassword } from "@/lib/security";
-import { readPrivateJson, SETTINGS_PATH } from "@/lib/blob";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   try {
     requireAppPassword(request);
-    const stored = await readPrivateJson(SETTINGS_PATH);
-    const keys = stored?.encrypted ? JSON.parse((await import("@/lib/security")).decryptText(stored.encrypted)) : {};
     const checks = {
       appPassword: Boolean(process.env.APP_PASSWORD),
       encryptionSecret: /^[a-f0-9]{64}$/i.test(process.env.ENCRYPTION_SECRET || ""),
@@ -16,10 +13,9 @@ export async function GET(request: Request) {
       githubOwner: Boolean(process.env.GITHUB_OWNER),
       githubRepo: Boolean(process.env.GITHUB_REPO),
       githubToken: Boolean(process.env.GITHUB_TOKEN),
-      groqKeySaved: Boolean(keys.groq),
-      togetherKeySaved: Boolean(keys.together),
-      cerebrasKeySaved: Boolean(keys.cerebras)
+      localOllamaVision: true,
+      localOllamaText: true
     };
-    return NextResponse.json({ checks, readyForExtraction: checks.privateBlobToken && checks.publicBlobToken && checks.workerSecret && checks.githubOwner && checks.githubRepo && checks.githubToken && checks.groqKeySaved, readyForRender: checks.publicBlobToken && checks.workerSecret && checks.githubOwner && checks.githubRepo && checks.githubToken });
+    return NextResponse.json({ checks, readyForExtraction: checks.privateBlobToken && checks.publicBlobToken && checks.workerSecret && checks.githubOwner && checks.githubRepo && checks.githubToken, readyForRender: checks.publicBlobToken && checks.workerSecret && checks.githubOwner && checks.githubRepo && checks.githubToken });
   } catch (e: any) { return NextResponse.json({ error: e.message || "Diagnostics failed." }, { status: 401 }); }
 }

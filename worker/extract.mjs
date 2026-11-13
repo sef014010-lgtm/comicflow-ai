@@ -62,7 +62,7 @@ try {
     await callback({ status: 'extracting', progress: 25 + Math.round((i + 1) / imageUrls.length * 20) });
   }
   const notes = [];
-  for (let i = 0; i < pages.length; i += 4) notes.push(await vision(job.groqKey, pages.slice(i, i + 4).map(p => p.url), i));
+  for (let i = 0; i < pages.length; i += 3) notes.push(await vision(job.groqKey, pages.slice(i, i + 3).map(p => p.url), i));
   const prompt = `Write an original truthful YouTube comic recap in American English based only on the visible page notes. Preserve chronology; do not invent names or events. Tone: ${job.tone}. Length: ${job.format === 'shorts' ? '110-145 words' : '420-650 words'}. Return JSON with narration, youtubeTitle, description, keywords array, hashtags array. PAGE NOTES:\\n${notes.join('\\n\\n')}`;
   await callback({ status: 'extracting', progress: 65 });
   const result = JSON.parse(await ollama(prompt));

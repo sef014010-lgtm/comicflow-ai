@@ -64,10 +64,6 @@ Set all of these in Vercel → Project → Settings → Environment Variables:
 | `GITHUB_OWNER` | Yes | GitHub account or organization name |
 | `GITHUB_REPO` | Yes | Repository name |
 | `GITHUB_WORKFLOW_REF` | Recommended | Branch containing the workflow, normally `main` |
-| `GROQ_TEXT_MODEL` | Optional | Text model currently available in your Groq account |
-| `GROQ_VISION_MODEL` | Optional | Vision model currently available in your Groq account |
-| `TOGETHER_MODEL` | Optional | Together model currently available in your account |
-| `CEREBRAS_MODEL` | Optional | Cerebras model currently available in your account |
 
 Generate secrets locally:
 
@@ -90,13 +86,11 @@ In GitHub → Repository → Settings → Secrets and variables → Actions, add
 
 Do not add the private Blob token to GitHub Actions. The worker only uploads the final public MP4.
 
-## 6. Deploy and configure AI keys
+## 6. Deploy the local AI pipeline
 
 1. Redeploy Vercel after setting environment variables.
 2. Open the Vercel URL and enter `APP_PASSWORD`.
-3. Open **API settings**.
-4. Enter the Groq key (required), and optionally Together AI and Cerebras keys.
-5. Save the keys. They are encrypted with AES-256-GCM before being written to the Private Blob store.
+3. No AI settings or provider keys are required. GitHub Actions downloads Ollama and `qwen2.5vl:3b` automatically when an extraction job starts.
 
 ## 7. Create a video
 

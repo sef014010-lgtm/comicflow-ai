@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       if (Number.isFinite(age) && age < 45 * 60 * 1000) return NextResponse.json({ queued: true, jobId, alreadyQueued: true });
     }
     if (job.status === "complete" && job.videoUrl) throw new Error("This job already has a completed video. Create a new job if you want another export.");
-    if (!job.pages?.length || job.pages.length > 12 || !job.audioParts?.length || job.audioParts.length > 3) throw new Error("This job has an invalid page or audio manifest. Re-run analysis and narration.");
+    if (!job.pages?.length || job.pages.length > 500 || !job.audioParts?.length || job.audioParts.length > 3) throw new Error("This job has an invalid page or audio manifest. Re-run analysis and narration (maximum 500 pages per render).");
     const owner = process.env.GITHUB_OWNER, repo = process.env.GITHUB_REPO, token = process.env.GITHUB_TOKEN;
     if (!owner || !repo || !token) throw new Error("GitHub Actions is not configured. Add GITHUB_OWNER, GITHUB_REPO, and GITHUB_TOKEN in Vercel.");
     await updateJob(jobId, { status: "queued", progress: 0, error: undefined, videoUrl: undefined });

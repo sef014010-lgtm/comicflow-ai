@@ -1,0 +1,45 @@
+name: ComicFlow Playwright extraction + local Qwen
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: ComicFlow job ID
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: comicflow-extract-${{ inputs.job_id }}
+  cancel-in-progress: false
+jobs:
+  extract-and-script:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      JOB_ID: ${{ inputs.job_id }}
+      COMICFLOW_API_URL: ${{ secrets.COMICFLOW_API_URL }}
+      COMICFLOW_WORKER_SECRET: ${{ secrets.COMICFLOW_WORKER_SECRET }}
+      BLOB_PUBLIC_READ_WRITE_TOKEN: ${{ secrets.BLOB_PUBLIC_READ_WRITE_TOKEN }}
+      GROQ_VISION_MODEL: meta-llama/llama-4-scout-17b-16e-instruct
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate worker secrets
+        run: |
+          test -n "$COMICFLOW_API_URL" || (echo "Missing COMICFLOW_API_URL secret" && exit 1)
+          test -n "$COMICFLOW_WORKER_SECRET" || (echo "Missing COMICFLOW_WORKER_SECRET secret" && exit 1)
+          test -n "$BLOB_PUBLIC_READ_WRITE_TOKEN" || (echo "Missing BLOB_PUBLIC_READ_WRITE_TOKEN secret" && exit 1)
+      - name: Install worker dependencies
+        run: npm install --no-audit --no-fund && npm install --no-save playwright
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Install and start Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          (ollama serve > /tmp/ollama.log 2>&1 &)
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:11434/api/tags >/dev/null && break || sleep 2; done
+          ollama pull qwen2.5:1.5b
+      - name: Extract authorized public pages and generate script
+        run: node worker/extract.mjs

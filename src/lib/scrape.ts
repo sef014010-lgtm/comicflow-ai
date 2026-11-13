@@ -87,13 +87,30 @@ export async function extractComicImages(inputUrl: string) {
   const found = new Set<string>();
   const attrs = ["data-src", "data-lazy-src", "data-original", "data-url", "src"];
   $("img").each((_, element) => {
+    const srcset = $(element).attr("data-srcset") || $(element).attr("srcset") || "";
+    if (srcset) {
+      const candidates = srcset.split(",").map((entry) => {
+        const [candidate, descriptor = ""] = entry.trim().split(/\s+/, 2);
+        const score = descriptor.endsWith("w") ? Number.parseInt(descriptor, 10) : descriptor.endsWith("x") ? Number.parseFloat(descriptor) * 1000 : 0;
+        return { candidate, score: Number.isFinite(score) ? score : 0 };
+      }).filter(item => item.candidate && !item.candidate.startsWith("data:") && !item.candidate.startsWith("blob:"));
+      candidates.sort((a, b) => b.score - a.score);
+      if (candidates[0]) {
+        try {
+          const absolute = new URL(candidates[0].candidate, url).toString();
+          if (/\.(png|jpe?g|webp|avif)(?:[?#]|$)/i.test(absolute) || /chapter|page|comic|manga|manhwa|image/i.test(absolute)) found.add(absolute);
+        } catch {}
+      }
+    }
     for (const attr of attrs) {
       const raw = $(element).attr(attr);
       if (!raw || raw.startsWith("data:") || raw.startsWith("blob:")) continue;
       try {
         const absolute = new URL(raw, url).toString();
-        if (/\.(png|jpe?g|webp|avif)(?:[?#]|$)/i.test(absolute) || /chapter|page|comic|manga|manhwa|image/i.test(absolute)) found.add(absolute);
-        break;
+        if (/\.(png|jpe?g|webp|avif)(?:[?#]|$)/i.test(absolute) || /chapter|page|comic|manga|manhwa|image/i.test(absolute)) {
+          found.add(absolute);
+          break;
+        }
       } catch {}
     }
   });

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireWorkerSecret, decryptText } from "@/lib/security";
+import { requireWorkerSecret } from "@/lib/security";
 import { readJob, updateJob } from "@/lib/jobs";
-import { readPrivateJson, SETTINGS_PATH } from "@/lib/blob";
 export const runtime = "nodejs";
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -11,11 +10,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     const job = await readJob(id);
     if (!job) return NextResponse.json({ error: "Job not found." }, { status: 404 });
     if (job.status !== "extracting") return NextResponse.json({ error: `Job is not awaiting extraction (status: ${job.status}).` }, { status: 409 });
-    const stored = await readPrivateJson(SETTINGS_PATH);
-    if (!stored?.encrypted) throw new Error("No encrypted AI provider settings were found.");
-    const keys = JSON.parse(decryptText(stored.encrypted));
-    if (!keys.groq) throw new Error("Groq API key is missing from private settings.");
-    return NextResponse.json({ id: job.id, sourceUrls: job.sourceUrls, format: job.format, tone: job.tone || "cinematic, engaging and suspenseful", groqKey: keys.groq });
+    return NextResponse.json({ id: job.id, sourceUrls: job.sourceUrls, format: job.format, tone: job.tone || "cinematic, engaging and suspenseful" });
   } catch (e: any) { return NextResponse.json({ error: e.message || "Worker request failed." }, { status: 401 }); }
 }
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
